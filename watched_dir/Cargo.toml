@@ -1,0 +1,6 @@
+[package]
+name = "inline_rust"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

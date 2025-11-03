@@ -1,0 +1,72 @@
+[package]
+name = "cylo"
+version = "0.1.0"
+edition = "2024"
+description = "Secure multi-language code execution service"
+authors = ["CYRUP AI"]
+repository = "https://github.com/cyrup-ai/cylo"
+license = "MIT"
+keywords = ["sandbox", "security", "execution", "isolation", "vm"]
+categories = ["os", "development-tools", "virtualization"]
+readme = "README.md"
+
+[dependencies]
+cyrup_termcolor = "2"
+cyrup_sugars = { version = "0.5", package = "cyrup_sugars", features = ["all"] }
+
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+log = "0.4"
+env_logger = "0.11"
+thiserror = "2"
+clap = { version = "4", features = ["derive", "cargo"] }
+tempfile = "3"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+tokio = { version = "1", features = ["full"] }
+
+
+# Regular dependencies
+nix = { version = "0.30", features = ["user", "sched"] }
+libc = "1.0.0-alpha.1"
+num_cpus = "1"
+
+# Additional dependencies
+statig = "0.4"
+watchexec = "8"
+watchexec-events = "6"
+watchexec-signals = "5"
+xattr = "1"
+serde_json = "1"
+
+# HTTP client for Unix domain sockets
+hyper = { version = "1", features = ["client", "http1"] }
+hyper-util = { version = "0.1", features = ["client-legacy", "tokio"] }
+hyper-client-sockets = { version = "0.6", features = ["unix", "tokio-backend"] }
+http = "1"
+http-body-util = "0.1"
+bytes = "1"
+
+ssh2 = "0.9"
+openssl-sys = { version = "0.9", features = ["vendored"] }
+extism = "1"
+
+[dev-dependencies]
+assert_fs = "1"
+assert_cmd = "2"
+predicates = "3"
+env_logger = "0.11"
+
+# Binary removed - this is a library package
+
+[lib]
+name = "cylo"
+path = "src/lib.rs"
+
+# Linux-specific dependencies
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock = { version = "0.4", optional = true }
+
+[features]
+default = ["landlock"]
+landlock = ["dep:landlock"]
