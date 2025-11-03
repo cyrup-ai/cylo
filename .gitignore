@@ -32,6 +32,7 @@ task/*
 # ==============================
 # Rust Specific
 # ==============================
+Cargo.lock
 target/       # Only ignore the target directory at the crate root
 **/target/    # Ignore target directories in any subdirectory
 # Backup files for Rust sources at the crate root
