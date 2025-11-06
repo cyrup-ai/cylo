@@ -10,6 +10,13 @@ keywords = ["sandbox", "security", "execution", "isolation", "vm"]
 categories = ["os", "development-tools", "virtualization"]
 readme = "README.md"
 
+[package.metadata.bundle]
+identifier = "ai.kodegen.cylo"
+publisher = "KODEGEN.ᴀɪ"
+category = "Developer Tool"
+copyright = "Copyright © 2025"
+short_description = "Secure multi-language code execution service"
+
 [dependencies]
 cyrup_termcolor = "2"
 cyrup_sugars = { version = "0.5", package = "cyrup_sugars", features = ["all"] }
@@ -70,3 +77,4 @@ landlock = { version = "0.4", optional = true }
 [features]
 default = ["landlock"]
 landlock = ["dep:landlock"]
+
