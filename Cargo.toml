@@ -13,9 +13,12 @@ readme = "README.md"
 [package.metadata.bundle]
 identifier = "ai.kodegen.cylo"
 publisher = "KODEGEN.ᴀɪ"
-category = "Developer Tool"
 copyright = "Copyright © 2025"
-short_description = "Secure multi-language code execution service"
+short_description = "Memory-efficient, Blazing-Fast, MCP tools for code generation agents."
+
+[package.metadata.bundle.category]
+linux = "Development"
+macos = "public.app-category.developer-tools"
 
 [dependencies]
 cyrup_termcolor = "2"
