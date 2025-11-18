@@ -39,6 +39,10 @@ pub enum Cylo {
     /// SweetMCP plugin execution with plugin path
     /// Example: Cylo::SweetMcpPlugin("./plugins/eval-py.wasm")
     SweetMcpPlugin(String),
+
+    /// Windows Job Objects backend for process sandboxing
+    /// Example: Cylo::WindowsJob("kodegen-workspace")
+    WindowsJob(String),
 }
 
 impl Cylo {
@@ -151,6 +155,28 @@ impl Cylo {
 
                 Ok(())
             }
+
+            Cylo::WindowsJob(workspace_name) => {
+                if workspace_name.is_empty() {
+                    return Err(CyloError::InvalidConfiguration {
+                        backend: "WindowsJob",
+                        message: "Workspace name cannot be empty",
+                    });
+                }
+
+                // Validate workspace name format
+                if !workspace_name
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+                {
+                    return Err(CyloError::InvalidConfiguration {
+                        backend: "WindowsJob",
+                        message: "Workspace name must contain only alphanumeric characters, hyphens, and underscores",
+                    });
+                }
+
+                Ok(())
+            }
         }
     }
 
@@ -162,6 +188,7 @@ impl Cylo {
             Cylo::FireCracker(_) => "FireCracker",
             Cylo::Apple(_) => "Apple",
             Cylo::SweetMcpPlugin(_) => "SweetMcpPlugin",
+            Cylo::WindowsJob(_) => "WindowsJob",
         }
     }
 
@@ -173,6 +200,7 @@ impl Cylo {
             Cylo::FireCracker(image) => image,
             Cylo::Apple(image) => image,
             Cylo::SweetMcpPlugin(plugin_path) => plugin_path,
+            Cylo::WindowsJob(workspace_name) => workspace_name,
         }
     }
 }
@@ -184,6 +212,7 @@ impl fmt::Display for Cylo {
             Cylo::FireCracker(image) => write!(f, "FireCracker({image})"),
             Cylo::Apple(image) => write!(f, "Apple({image})"),
             Cylo::SweetMcpPlugin(plugin_path) => write!(f, "SweetMcpPlugin({plugin_path})"),
+            Cylo::WindowsJob(workspace_name) => write!(f, "WindowsJob({workspace_name})"),
         }
     }
 }
@@ -487,6 +516,22 @@ pub fn validate_environment_spec(env: &Cylo) -> CyloResult<()> {
             if !plugin_path.ends_with(".wasm") {
                 return Err(CyloError::validation(
                     "Plugin file must have .wasm extension",
+                ));
+            }
+
+            Ok(())
+        }
+        Cylo::WindowsJob(workspace_name) => {
+            if workspace_name.is_empty() {
+                return Err(CyloError::validation("Workspace name cannot be empty"));
+            }
+
+            if !workspace_name
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+            {
+                return Err(CyloError::validation(
+                    "Workspace name must contain only alphanumeric characters, hyphens, and underscores",
                 ));
             }
 

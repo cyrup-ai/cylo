@@ -77,6 +77,16 @@ path = "src/lib.rs"
 [target.'cfg(target_os = "linux")'.dependencies]
 landlock = { version = "0.4", optional = true }
 
+# Windows-specific dependencies
+[target.'cfg(target_os = "windows")'.dependencies]
+win32job = "2.0"
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+    "Win32_Security",
+] }
+
 [features]
 default = ["landlock"]
 landlock = ["dep:landlock"]

@@ -43,3 +43,8 @@ pub use firecracker::FireCrackerBackend;
 // SweetMCP plugin backend (available on all platforms)
 pub mod sweetmcp_plugin;
 pub use sweetmcp_plugin::SweetMcpPluginBackend;
+
+#[cfg(target_os = "windows")]
+pub mod windows;
+#[cfg(target_os = "windows")]
+pub use windows::WindowsJobBackend;

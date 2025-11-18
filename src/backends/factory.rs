@@ -12,6 +12,8 @@ use crate::execution_env::{CyloError, CyloResult};
 use crate::backends::AppleBackend;
 #[cfg(target_os = "linux")]
 use crate::backends::{FireCrackerBackend, LandLockBackend};
+#[cfg(target_os = "windows")]
+use crate::backends::WindowsJobBackend;
 use crate::backends::SweetMcpPluginBackend;
 
 /// Create a backend instance from configuration
@@ -48,6 +50,12 @@ pub fn create_backend(
             Ok(Box::new(backend))
         }
 
+        #[cfg(target_os = "windows")]
+        crate::execution_env::Cylo::WindowsJob(workspace_name) => {
+            let backend = WindowsJobBackend::new(workspace_name.clone(), config)?;
+            Ok(Box::new(backend))
+        }
+
         // Platform-specific error handling
         #[cfg(not(target_os = "macos"))]
         crate::execution_env::Cylo::Apple(_) => Err(CyloError::platform_unsupported(
@@ -65,6 +73,12 @@ pub fn create_backend(
         crate::execution_env::Cylo::FireCracker(_) => Err(CyloError::platform_unsupported(
             "FireCracker",
             "FireCracker is only available on Linux",
+        )),
+
+        #[cfg(not(target_os = "windows"))]
+        crate::execution_env::Cylo::WindowsJob(_) => Err(CyloError::platform_unsupported(
+            "WindowsJob",
+            "WindowsJob is only available on Windows",
         )),
 
         crate::execution_env::Cylo::SweetMcpPlugin(plugin_path) => {
@@ -89,6 +103,9 @@ pub fn available_backends() -> Vec<&'static str> {
         backends.push("LandLock");
         backends.push("FireCracker");
     }
+
+    #[cfg(target_os = "windows")]
+    backends.push("WindowsJob");
 
     backends
 }
