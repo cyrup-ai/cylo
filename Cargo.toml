@@ -1,6 +1,6 @@
 [package]
 name = "cylo"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "Secure multi-language code execution service"
 authors = ["CYRUP AI"]
@@ -90,4 +90,3 @@ windows = { version = "0.62", features = [
 [features]
 default = ["landlock"]
 landlock = ["dep:landlock"]
-
