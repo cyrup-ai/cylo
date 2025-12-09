@@ -14,7 +14,7 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crate::async_task::AsyncTaskBuilder;
 use crate::backends::AsyncTask;
@@ -54,16 +54,18 @@ impl WindowsJobBackend {
     pub fn new(workspace_name: String, config: BackendConfig) -> BackendResult<Self> {
         // Platform validation - WindowsJob requires Windows
         if cfg!(not(target_os = "windows")) {
-            return Err(BackendError::PlatformUnsupported(
-                "WindowsJob backend is only available on Windows".to_string(),
-            ));
+            return Err(BackendError::NotAvailable {
+                backend: "windows",
+                reason: "WindowsJob backend is only available on Windows".to_string(),
+            });
         }
 
         // Validate workspace name
         if workspace_name.is_empty() {
-            return Err(BackendError::Configuration(
-                "Workspace name cannot be empty".to_string(),
-            ));
+            return Err(BackendError::InvalidConfig {
+                backend: "windows",
+                details: "Workspace name cannot be empty".to_string(),
+            });
         }
 
         Ok(Self {
@@ -88,17 +90,47 @@ impl WindowsJobBackend {
                 c
             }
             "rust" => {
-                // For Rust, we need to compile first
-                // This is simplified - production would use cargo
+                // Compile Rust source to Windows executable
                 let exe_path = file_path.with_extension("exe");
-                let mut compile_cmd = Command::new("rustc");
-                compile_cmd.arg(file_path).arg("-o").arg(&exe_path);
-                
-                // Note: In production, we'd compile, then return Command for the exe
-                // For now, return error indicating compilation step needed
-                return Err(BackendError::Unsupported(
-                    "Rust compilation not yet implemented in Windows backend".to_string(),
-                ));
+
+                log::debug!(
+                    "Compiling Rust code: {:?} -> {:?}",
+                    file_path,
+                    exe_path
+                );
+
+                // Execute rustc to compile the code
+                let compile_output = Command::new("rustc")
+                    .arg(file_path)
+                    .arg("-o")
+                    .arg(&exe_path)
+                    .output()
+                    .map_err(|e| BackendError::ProcessFailed {
+                        details: format!("Failed to execute rustc (is Rust installed?): {}", e)
+                    })?;
+
+                // Check compilation result
+                if !compile_output.status.success() {
+                    let stderr = String::from_utf8_lossy(&compile_output.stderr);
+                    let stdout = String::from_utf8_lossy(&compile_output.stdout);
+                    let combined = if stdout.is_empty() {
+                        stderr.to_string()
+                    } else {
+                        format!("{}\n{}", stdout, stderr)
+                    };
+
+                    log::error!("Rust compilation failed: {}", combined);
+
+                    return Err(BackendError::ProcessFailed {
+                        details: format!("Rust compilation failed:\n{}", combined)
+                    });
+                }
+
+                log::debug!("Rust compilation successful, executable: {:?}", exe_path);
+
+                // Return command to execute the compiled binary
+                let mut c = Command::new(&exe_path);
+                c
             }
             "javascript" | "js" | "node" => {
                 let mut c = Command::new("node");
@@ -111,9 +143,10 @@ impl WindowsJobBackend {
                 c
             }
             _ => {
-                return Err(BackendError::Unsupported(
-                    format!("Language '{}' not supported", language),
-                ));
+                return Err(BackendError::NotAvailable {
+                    backend: "windows",
+                    reason: format!("Language '{}' not supported", language),
+                });
             }
         };
 
@@ -127,19 +160,21 @@ impl WindowsJobBackend {
     /// Execute code with Job Object isolation
     ///
     /// # Arguments
+    /// * `workspace_name` - Name of the workspace for identification and logging
     /// * `request` - Execution request
     ///
     /// # Returns
     /// Execution result with output and metrics
-    async fn execute_with_job(request: ExecutionRequest) -> BackendResult<ExecutionResult> {
+    async fn execute_with_job(workspace_name: String, request: ExecutionRequest) -> BackendResult<ExecutionResult> {
+        log::info!("Executing code in workspace: {}", workspace_name);
         let start_time = Instant::now();
 
         // Create temporary directory for code execution
-        let temp_dir = std::env::temp_dir().join(&format!("cylo_{}", uuid::Uuid::new_v4()));
+        let temp_dir = std::env::temp_dir().join(&format!("cylo_{}_{}", workspace_name, uuid::Uuid::new_v4()));
         fs::create_dir_all(&temp_dir)
-            .map_err(|e| BackendError::Initialization(
-                format!("Failed to create temp directory: {}", e)
-            ))?;
+            .map_err(|e| BackendError::Internal {
+                message: format!("Failed to create temp directory: {}", e)
+            })?;
 
         // Determine file extension
         let extension = match request.language.to_lowercase().as_str() {
@@ -153,13 +188,13 @@ impl WindowsJobBackend {
         // Write code to temporary file
         let code_file = temp_dir.join(format!("code.{}", extension));
         let mut file = fs::File::create(&code_file)
-            .map_err(|e| BackendError::Execution(
-                format!("Failed to create code file: {}", e)
-            ))?;
+            .map_err(|e| BackendError::ProcessFailed {
+                details: format!("Failed to create code file: {}", e)
+            })?;
         file.write_all(request.code.as_bytes())
-            .map_err(|e| BackendError::Execution(
-                format!("Failed to write code: {}", e)
-            ))?;
+            .map_err(|e| BackendError::ProcessFailed {
+                details: format!("Failed to write code: {}", e)
+            })?;
 
         // Convert resource limits to Windows limits
         let windows_limits = WindowsLimits::from_resource_limits(&request.limits)?;
@@ -184,21 +219,29 @@ impl WindowsJobBackend {
 
         // Spawn the process
         let mut child = cmd.spawn()
-            .map_err(|e| BackendError::Execution(
-                format!("Failed to spawn process: {}", e)
-            ))?;
+            .map_err(|e| BackendError::ProcessFailed {
+                details: format!("Failed to spawn process: {}", e)
+            })?;
 
         // Get process ID and assign to job
         let process_id = child.id();
+
+        // Validate PID before assignment
+        if !job::is_valid_pid(process_id) {
+            return Err(BackendError::ProcessFailed {
+                details: format!("Child process has invalid PID: {}", process_id)
+            });
+        }
+
         job.assign_process(process_id)?;
 
         // Provide input if specified
         if let Some(ref input_data) = request.input {
             if let Some(ref mut stdin) = child.stdin {
                 stdin.write_all(input_data.as_bytes())
-                    .map_err(|e| BackendError::Execution(
-                        format!("Failed to write stdin: {}", e)
-                    ))?;
+                    .map_err(|e| BackendError::ProcessFailed {
+                        details: format!("Failed to write stdin: {}", e)
+                    })?;
             }
         }
 
@@ -208,23 +251,31 @@ impl WindowsJobBackend {
             match tokio::time::timeout(request.timeout, async move {
                 child.wait_with_output()
             }).await {
-                Ok(result) => result.map_err(|e| BackendError::Execution(
-                    format!("Process execution failed: {}", e)
-                ))?,
+                Ok(result) => result.map_err(|e| BackendError::ProcessFailed {
+                    details: format!("Process execution failed: {}", e)
+                })?,
                 Err(_) => {
                     // Timeout occurred - terminate the job
                     let _ = job.terminate_all(1);
-                    return Err(BackendError::Timeout(request.timeout));
+                    return Err(BackendError::ExecutionTimeout {
+                        seconds: request.timeout.as_secs()
+                    });
                 }
             }
         } else {
             child.wait_with_output()
-                .map_err(|e| BackendError::Execution(
-                    format!("Process execution failed: {}", e)
-                ))?
+                .map_err(|e| BackendError::ProcessFailed {
+                    details: format!("Process execution failed: {}", e)
+                })?
         };
 
         let duration = start_time.elapsed();
+
+        // Query comprehensive job statistics
+        let process_count = job.active_process_count().unwrap_or(1);
+        let (cpu_time_ms, disk_read_bytes, disk_write_bytes, network_other_bytes) =
+            job.get_cpu_and_io_stats().unwrap_or((0, 0, 0, 0));
+        let peak_memory = job.get_memory_usage().unwrap_or(0);
 
         // Clean up temporary directory
         let _ = fs::remove_dir_all(&temp_dir);
@@ -241,8 +292,17 @@ impl WindowsJobBackend {
         };
 
         result.duration = duration;
+        result.resource_usage.process_count = process_count;
+        result.resource_usage.cpu_time_ms = cpu_time_ms;
+        result.resource_usage.peak_memory = peak_memory;
+        result.resource_usage.disk_bytes_read = disk_read_bytes;
+        result.resource_usage.disk_bytes_written = disk_write_bytes;
+        // OtherTransferCount includes network and other non-read/write I/O
+        // Split evenly as approximation since Windows doesn't distinguish sent/received
+        result.resource_usage.network_bytes_sent = network_other_bytes / 2;
+        result.resource_usage.network_bytes_received = network_other_bytes / 2;
         result.metadata.insert("backend".to_string(), "WindowsJob".to_string());
-        result.metadata.insert("workspace".to_string(), request.backend_config.get("workspace").cloned().unwrap_or_default());
+        result.metadata.insert("workspace".to_string(), workspace_name);
 
         Ok(result)
     }
@@ -250,8 +310,9 @@ impl WindowsJobBackend {
 
 impl ExecutionBackend for WindowsJobBackend {
     fn execute_code(&self, request: ExecutionRequest) -> AsyncTask<ExecutionResult> {
+        let workspace_name = self.workspace_name.clone();
         AsyncTaskBuilder::new(async move {
-            match Self::execute_with_job(request).await {
+            match Self::execute_with_job(workspace_name, request).await {
                 Ok(result) => result,
                 Err(e) => ExecutionResult::failure(-1, format!("WindowsJob execution failed: {}", e)),
             }
@@ -316,6 +377,7 @@ impl ExecutionBackend for WindowsJobBackend {
             "javascript",
             "js",
             "node",
+            "rust",
             "bash",
             "sh",
         ]
@@ -348,8 +410,153 @@ mod tests {
         if let Ok(backend) = WindowsJobBackend::new("test".to_string(), config) {
             assert!(backend.supports_language("python"));
             assert!(backend.supports_language("javascript"));
+            assert!(backend.supports_language("rust"));
             assert!(backend.supports_language("bash"));
             assert!(!backend.supports_language("cobol"));
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    #[tokio::test]
+    async fn test_rust_compilation_and_execution() {
+        use std::time::Duration;
+
+        let config = BackendConfig::new("test_rust");
+        let backend = match WindowsJobBackend::new("test_rust".to_string(), config) {
+            Ok(b) => b,
+            Err(_) => return, // Skip if backend unavailable
+        };
+
+        // Test 1: Valid Rust code that prints to stdout
+        let rust_code = r#"
+fn main() {
+    println!("Hello from Rust on Windows!");
+    println!("Job Object execution successful");
+}
+"#;
+
+        let request = ExecutionRequest::new(rust_code, "rust")
+            .with_timeout(Duration::from_secs(30));
+
+        let result = backend.execute_code(request).await;
+
+        match result {
+            ExecutionResult { exit_code: 0, stdout, .. } => {
+                assert!(
+                    stdout.contains("Hello from Rust on Windows!"),
+                    "Expected greeting in stdout, got: {}",
+                    stdout
+                );
+                assert!(
+                    stdout.contains("Job Object execution successful"),
+                    "Expected success message in stdout, got: {}",
+                    stdout
+                );
+            }
+            ExecutionResult { exit_code, stderr, .. } => {
+                // If rustc is not installed, skip test
+                if stderr.contains("Failed to execute rustc") {
+                    eprintln!("Skipping test: rustc not installed");
+                    return;
+                }
+                panic!(
+                    "Rust execution failed with exit code {}: {}",
+                    exit_code, stderr
+                );
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    #[tokio::test]
+    async fn test_rust_compilation_error() {
+        use std::time::Duration;
+
+        let config = BackendConfig::new("test_rust_error");
+        let backend = match WindowsJobBackend::new("test_rust_error".to_string(), config) {
+            Ok(b) => b,
+            Err(_) => return,
+        };
+
+        // Test 2: Invalid Rust code should fail compilation
+        let invalid_rust = r#"
+fn main() {
+    this_function_does_not_exist();
+    let x: u32 = "not a number";
+}
+"#;
+
+        let request = ExecutionRequest::new(invalid_rust, "rust")
+            .with_timeout(Duration::from_secs(30));
+
+        let result = backend.execute_code(request).await;
+
+        // Should fail (non-zero exit code or error in stderr)
+        assert!(
+            result.exit_code != 0 || !result.stderr.is_empty(),
+            "Expected compilation error, but execution succeeded"
+        );
+
+        // Error message should mention compilation failure
+        let error_output = result.combined_output();
+        assert!(
+            error_output.contains("error") || error_output.contains("failed"),
+            "Expected error message in output, got: {}",
+            error_output
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[tokio::test]
+    async fn test_rust_resource_limits() {
+        use std::time::Duration;
+        use crate::backends::config::ResourceLimits;
+
+        let config = BackendConfig::new("test_rust_limits");
+        let backend = match WindowsJobBackend::new("test_rust_limits".to_string(), config) {
+            Ok(b) => b,
+            Err(_) => return,
+        };
+
+        // Test 3: Rust code with resource usage tracking
+        let rust_code = r#"
+fn main() {
+    let v: Vec<u32> = (0..1000).collect();
+    println!("Allocated vector with {} elements", v.len());
+}
+"#;
+
+        let limits = ResourceLimits {
+            memory_bytes: Some(100 * 1024 * 1024), // 100MB
+            cpu_time_ms: Some(10_000),              // 10 seconds
+            max_processes: Some(5),
+            ..Default::default()
+        };
+
+        let request = ExecutionRequest::new(rust_code, "rust")
+            .with_timeout(Duration::from_secs(30))
+            .with_limits(limits);
+
+        let result = backend.execute_code(request).await;
+
+        if result.exit_code == 0 {
+            // Verify resource tracking works
+            assert!(
+                result.resource_usage.peak_memory > 0,
+                "Expected non-zero memory usage"
+            );
+            assert!(
+                result.resource_usage.process_count > 0,
+                "Expected at least one process"
+            );
+            println!(
+                "Rust execution metrics - Memory: {}KB, Processes: {}, CPU: {}ms",
+                result.resource_usage.peak_memory / 1024,
+                result.resource_usage.process_count,
+                result.resource_usage.cpu_time_ms
+            );
+        } else if result.stderr.contains("Failed to execute rustc") {
+            eprintln!("Skipping test: rustc not installed");
         }
     }
 }

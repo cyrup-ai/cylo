@@ -9,6 +9,8 @@ use crate::metadata::MetadataManager;
 use crate::sandbox::create_python_venv;
 
 use super::utils::{find_command, get_safe_watched_dir};
+#[cfg(test)]
+use super::utils::command_exists;
 
 /// Executes Python code in a sandboxed environment
 pub fn exec_python(code: &str, config: &RamdiskConfig) -> Result<()> {

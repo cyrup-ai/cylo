@@ -1,10 +1,11 @@
-use std::{fs, os::unix::fs::PermissionsExt};
+use std::fs;
 
 use log::{info, warn};
 
 use crate::{
     error::{ExecError, Result},
     exec::find_command,
+    platform_utils::set_executable,
     sandbox::{environment::SandboxedEnvironment, path_utils::safe_path_to_str},
 };
 
@@ -91,7 +92,7 @@ pub fn create_go_environment_impl<'a>(
     }
 
     // Make it executable
-    if let Err(e) = fs::set_permissions(&go_bin_path, fs::Permissions::from_mode(0o755)) {
+    if let Err(e) = set_executable(&go_bin_path) {
         warn!("Failed to make Go wrapper executable: {}", e);
         return Err(ExecError::RuntimeError(format!(
             "Failed to set permissions on Go wrapper: {e}"

@@ -1,6 +1,6 @@
 [package]
 name = "cylo"
-version = "0.10.0"
+version = "0.10.1"
 edition = "2024"
 description = "Secure multi-language code execution service"
 authors = ["CYRUP AI"]
@@ -37,7 +37,6 @@ tokio = { version = "1", features = ["full"] }
 
 
 # Regular dependencies
-nix = { version = "0.30", features = ["user", "sched"] }
 libc = "1.0.0-alpha.1"
 num_cpus = "1"
 
@@ -46,13 +45,11 @@ statig = "0.4"
 watchexec = "8"
 watchexec-events = "6"
 watchexec-signals = "5"
-xattr = "1"
 serde_json = "1"
 
-# HTTP client for Unix domain sockets
+# HTTP client (cross-platform)
 hyper = { version = "1", features = ["client", "http1"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "tokio"] }
-hyper-client-sockets = { version = "0.6", features = ["unix", "tokio-backend"] }
 http = "1"
 http-body-util = "0.1"
 bytes = "1"
@@ -75,6 +72,9 @@ path = "src/lib.rs"
 
 # Linux-specific dependencies
 [target.'cfg(target_os = "linux")'.dependencies]
+nix = { version = "0.30", features = ["user", "sched"] }
+hyper-client-sockets = { version = "0.6", features = ["unix", "tokio-backend"] }
+xattr = "1"
 landlock = { version = "0.4", optional = true }
 
 # Windows-specific dependencies
@@ -85,6 +85,10 @@ windows = { version = "0.62", features = [
     "Win32_System_JobObjects",
     "Win32_System_Threading",
     "Win32_Security",
+    "Win32_System_Memory",
+    "Win32_Storage_FileSystem",
+    "Win32_Storage_Vhd",
+    "Win32_System_Ioctl",
 ] }
 
 [features]

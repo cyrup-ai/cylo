@@ -1,5 +1,3 @@
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
-use std::env;
 use std::path::{Path, PathBuf};
 
 use log::{info, warn};
@@ -8,7 +6,11 @@ use log::{info, warn};
 use crate::linux::LinuxRamdisk;
 #[cfg(target_os = "macos")]
 use crate::macos::MacosRamdisk;
-use crate::{config::RamdiskConfig, error::StorageError, platform::RamdiskPlatform};
+#[cfg(target_os = "windows")]
+use crate::windows::WindowsRamdisk;
+use crate::{config::RamdiskConfig, error::StorageError};
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+use crate::platform::RamdiskPlatform;
 
 /// Returns the path to the watched directory within the ramdisk
 pub fn get_watched_dir(config: &RamdiskConfig) -> PathBuf {
@@ -24,14 +26,14 @@ pub fn get_watched_dir(config: &RamdiskConfig) -> PathBuf {
 /// * `Ok(())` if successful
 /// * `Err(StorageError)` if creation fails
 pub fn create_ramdisk(config: &RamdiskConfig) -> Result<(), StorageError> {
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
     {
         let mut platform = get_platform_impl()?;
         platform.create(config)
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    Err(StorageError::UnsupportedOs(env::consts::OS.to_string()))
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    Err(StorageError::UnsupportedOs(std::env::consts::OS.to_string()))
 }
 
 /// Removes a ramdisk at the specified mount point
@@ -43,14 +45,14 @@ pub fn create_ramdisk(config: &RamdiskConfig) -> Result<(), StorageError> {
 /// * `Ok(())` if successful
 /// * `Err(StorageError)` if removal fails
 pub fn remove_ramdisk(mount_point: &Path) -> Result<(), StorageError> {
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
     {
         let platform = get_platform_impl()?;
         platform.remove(mount_point)
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    Err(StorageError::UnsupportedOs(env::consts::OS.to_string()))
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    Err(StorageError::UnsupportedOs(std::env::consts::OS.to_string()))
 }
 
 /// Checks if a path is mounted as a ramdisk
@@ -63,14 +65,14 @@ pub fn remove_ramdisk(mount_point: &Path) -> Result<(), StorageError> {
 /// * `Ok(false)` if not
 /// * `Err(StorageError)` if there's an error checking
 pub fn is_mounted(mount_point: &Path) -> Result<bool, StorageError> {
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
     {
         let platform = get_platform_impl()?;
         platform.is_mounted(mount_point)
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    Err(StorageError::UnsupportedOs(env::consts::OS.to_string()))
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    Err(StorageError::UnsupportedOs(std::env::consts::OS.to_string()))
 }
 
 /// Creates a secure execution environment
@@ -92,7 +94,7 @@ pub fn is_mounted(mount_point: &Path) -> Result<bool, StorageError> {
 /// * `Err(StorageError)` if creation fails
 pub fn create_secure_ramdisk(config: &RamdiskConfig) -> Result<(), StorageError> {
     let watched_dir = get_watched_dir(config);
-    let mut ramdisk_created = false;
+    let ramdisk_created: bool;
 
     #[cfg(target_os = "linux")]
     {
@@ -112,6 +114,7 @@ pub fn create_secure_ramdisk(config: &RamdiskConfig) -> Result<(), StorageError>
                     "Could not create ramdisk: {}. Falling back to local dir.",
                     e
                 );
+                ramdisk_created = false;
             }
         }
     }
@@ -132,14 +135,37 @@ pub fn create_secure_ramdisk(config: &RamdiskConfig) -> Result<(), StorageError>
                     "Could not create ramdisk: {}. Falling back to local dir.",
                     e
                 );
+                ramdisk_created = false;
             }
         }
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    #[cfg(target_os = "windows")]
+    {
+        let mut platform = crate::windows::WindowsRamdisk::new();
+        match platform.create(config) {
+            Ok(_) => {
+                info!(
+                    "Successfully created ramdisk at {}",
+                    config.mount_point.display()
+                );
+                ramdisk_created = true;
+            }
+            Err(e) => {
+                warn!(
+                    "Could not create ramdisk: {}. Falling back to local dir.",
+                    e
+                );
+                ramdisk_created = false;
+            }
+        }
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
         warn!("Ramdisk not supported on this OS: {}", std::env::consts::OS);
         warn!("Using local directory instead");
+        ramdisk_created = false;
     }
 
     if !ramdisk_created {
@@ -168,7 +194,7 @@ pub fn create_secure_ramdisk(config: &RamdiskConfig) -> Result<(), StorageError>
     Ok(())
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 fn get_platform_impl() -> Result<impl RamdiskPlatform, StorageError> {
     #[cfg(target_os = "linux")]
     {
@@ -178,5 +204,10 @@ fn get_platform_impl() -> Result<impl RamdiskPlatform, StorageError> {
     #[cfg(target_os = "macos")]
     {
         Ok(MacosRamdisk::new())
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Ok(WindowsRamdisk::new())
     }
 }

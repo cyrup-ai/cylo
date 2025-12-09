@@ -1,5 +1,6 @@
 use crate::error::StorageError;
 use std::fs;
+use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
 /// Utilities for detecting and managing mount points.

@@ -24,6 +24,7 @@ impl VMInstance {
 
             let ssh_config = self
                 .ssh_config
+                .as_ref()
                 .ok_or_else(|| BackendError::InvalidConfig {
                     backend: "FireCracker",
                     details: "SSH configuration not available for VM".to_string(),

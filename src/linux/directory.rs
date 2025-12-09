@@ -1,7 +1,7 @@
 use crate::error::StorageError;
 use log::{error, info};
 use std::fs;
-use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

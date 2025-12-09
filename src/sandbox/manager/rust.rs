@@ -1,10 +1,11 @@
-use std::{fs, os::unix::fs::PermissionsExt};
+use std::fs;
 
 use log::{info, warn};
 
 use crate::{
     error::{ExecError, Result},
     exec::find_command,
+    platform_utils::set_executable,
     sandbox::{environment::SandboxedEnvironment, path_utils::safe_path_to_str},
 };
 
@@ -132,11 +133,11 @@ edition = "2021"
     }
 
     // Make them executable
-    if let Err(e) = fs::set_permissions(&rustc_bin_path, fs::Permissions::from_mode(0o755)) {
+    if let Err(e) = set_executable(&rustc_bin_path) {
         warn!("Failed to make rustc wrapper executable: {}", e);
     }
 
-    if let Err(e) = fs::set_permissions(&cargo_bin_path, fs::Permissions::from_mode(0o755)) {
+    if let Err(e) = set_executable(&cargo_bin_path) {
         warn!("Failed to make cargo wrapper executable: {}", e);
     }
 

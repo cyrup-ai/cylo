@@ -1,4 +1,6 @@
-use std::{fs, io::Write, process::Command};
+use std::{io::Write, process::Command};
+#[cfg(unix)]
+use std::fs;
 
 use log::{error, info, warn};
 use tempfile::Builder as TempFileBuilder;
@@ -9,6 +11,8 @@ use crate::metadata::MetadataManager;
 use crate::sandbox::safe_path_to_string;
 
 use super::utils::{find_command, get_safe_watched_dir};
+#[cfg(test)]
+use super::utils::command_exists;
 
 /// Executes Bash shell scripts in a sandboxed environment
 pub fn exec_bash(code: &str, config: &RamdiskConfig) -> Result<()> {

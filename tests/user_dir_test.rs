@@ -1,8 +1,10 @@
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "linux")]
     use std::fs;
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn test_create_dir_in_run_user() {
         let uid = nix::unistd::geteuid().as_raw();
         let test_dir = format!("/run/user/{}/cylo-test-{}", uid, std::process::id());

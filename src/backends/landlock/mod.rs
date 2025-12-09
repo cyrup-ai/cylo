@@ -11,14 +11,13 @@
 // - Zero-overhead sandboxing
 // ============================================================================
 
-use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::async_task::AsyncTaskBuilder;
 use crate::backends::AsyncTask;
 use crate::backends::{
-    BackendConfig, BackendError, BackendResult, ExecutionBackend, ExecutionRequest,
+    BackendConfig, BackendResult, ExecutionBackend, ExecutionRequest,
     ExecutionResult, HealthStatus,
 };
 

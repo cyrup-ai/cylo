@@ -1,10 +1,11 @@
-use std::{fs, os::unix::fs::PermissionsExt, process::Command};
+use std::{fs, process::Command};
 
 use log::{info, warn};
 
 use crate::{
     error::{ExecError, Result},
     exec::find_command,
+    platform_utils::set_executable,
     sandbox::{environment::SandboxedEnvironment, path_utils::safe_path_to_str},
 };
 
@@ -137,8 +138,7 @@ pub fn create_python_environment_impl<'a>(
             }
 
             // Make it executable
-            if let Err(e) = fs::set_permissions(&python_bin_path, fs::Permissions::from_mode(0o755))
-            {
+            if let Err(e) = set_executable(&python_bin_path) {
                 warn!("Failed to make Python wrapper executable: {}", e);
             } else {
                 info!("Created minimal Python environment with wrapper script");

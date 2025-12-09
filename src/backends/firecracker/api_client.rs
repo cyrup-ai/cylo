@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::time::timeout;
 
-use crate::backends::{BackendError, BackendResult};
+use crate::backends::BackendError;
 
 // Type alias for hyper client with Unix socket support
 use hyper_client_sockets::tokio::TokioBackend;

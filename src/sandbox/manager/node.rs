@@ -1,10 +1,11 @@
-use std::{fs, os::unix::fs::PermissionsExt, process::Command};
+use std::{fs, process::Command};
 
 use log::{info, warn};
 
 use crate::{
     error::{ExecError, Result},
     exec::find_command,
+    platform_utils::set_executable,
     sandbox::{environment::SandboxedEnvironment, path_utils::safe_path_to_str},
 };
 
@@ -126,7 +127,7 @@ pub fn create_node_environment_impl<'a>(
     }
 
     // Make it executable
-    if let Err(e) = fs::set_permissions(&node_bin_path, fs::Permissions::from_mode(0o755)) {
+    if let Err(e) = set_executable(&node_bin_path) {
         warn!("Failed to make Node.js wrapper executable: {}", e);
         return Err(ExecError::RuntimeError(format!(
             "Failed to set permissions on Node.js wrapper: {e}"

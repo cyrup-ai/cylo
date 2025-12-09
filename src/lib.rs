@@ -98,6 +98,9 @@ pub use error::{ExecError, StorageError};
 pub mod config;
 pub use config::{FileSystem, RamdiskConfig};
 
+pub mod platform_utils;
+pub use platform_utils::set_executable;
+
 pub mod exec;
 pub use exec::{exec_bash, exec_go, exec_js, exec_python, exec_rust};
 
@@ -114,7 +117,9 @@ pub mod jail;
 pub mod state;
 pub use state::PipelineEvent;
 
+#[cfg(target_os = "linux")]
 pub mod firecracker;
+#[cfg(target_os = "linux")]
 pub use firecracker::{FirecrackerVM, create_firecracker_environment, is_firecracker_available};
 
 pub mod task;
@@ -130,6 +135,11 @@ pub use macos::MacosRamdisk;
 pub mod linux;
 #[cfg(target_os = "linux")]
 pub use linux::LinuxRamdisk;
+
+#[cfg(target_os = "windows")]
+pub mod windows;
+#[cfg(target_os = "windows")]
+pub use windows::WindowsRamdisk;
 
 // ============================================================================
 // Global instance manager

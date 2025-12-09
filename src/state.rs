@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use log::{error, info, warn};
 
 use crate::config::RamdiskConfig;
+#[cfg(target_os = "linux")]
 use crate::firecracker::FirecrackerVM;
 use crate::ramdisk::create_secure_ramdisk;
 use crate::task::{ExecutionPool, ExecutionTask};
@@ -59,6 +60,7 @@ pub struct ExecutionFlow {
     /// Number of tasks completed
     tasks_completed: usize,
     /// Firecracker VM instance if using VM isolation
+    #[cfg(target_os = "linux")]
     firecracker_vm: Option<FirecrackerVM>,
 }
 
@@ -72,6 +74,7 @@ impl Default for ExecutionFlow {
             execution_pool: None,
             tasks_submitted: 0,
             tasks_completed: 0,
+            #[cfg(target_os = "linux")]
             firecracker_vm: None,
         }
     }
@@ -88,6 +91,7 @@ impl ExecutionFlow {
             execution_pool: None,
             tasks_submitted: 0,
             tasks_completed: 0,
+            #[cfg(target_os = "linux")]
             firecracker_vm: None,
         }
     }
@@ -104,29 +108,38 @@ impl ExecutionFlow {
             (State::Init, PipelineEvent::ExecuteCode { language, code }) => {
                 info!("Received code execution request for {}", language);
 
-                // Check if Firecracker is available
-                if crate::firecracker::is_firecracker_available() {
-                    info!("Firecracker is available, using VM isolation");
-                    // Block on async function from sync context
-                    let handle = tokio::runtime::Handle::current();
-                    match handle.block_on(crate::firecracker::create_firecracker_environment(
-                        &self.config,
-                    )) {
-                        Ok(vm) => {
-                            info!("Firecracker VM created successfully");
-                            self.firecracker_vm = Some(vm);
-                            self.state = State::PrepareExecution;
+                // Check if Firecracker is available (Linux only)
+                #[cfg(target_os = "linux")]
+                {
+                    if crate::firecracker::is_firecracker_available() {
+                        info!("Firecracker is available, using VM isolation");
+                        // Block on async function from sync context
+                        let handle = tokio::runtime::Handle::current();
+                        match handle.block_on(crate::firecracker::create_firecracker_environment(
+                            &self.config,
+                        )) {
+                            Ok(vm) => {
+                                info!("Firecracker VM created successfully");
+                                self.firecracker_vm = Some(vm);
+                                self.state = State::PrepareExecution;
+                            }
+                            Err(e) => {
+                                warn!(
+                                    "Failed to create Firecracker VM: {}, falling back to ramdisk",
+                                    e
+                                );
+                                self.state = State::MountRamdisk;
+                            }
                         }
-                        Err(e) => {
-                            warn!(
-                                "Failed to create Firecracker VM: {}, falling back to ramdisk",
-                                e
-                            );
-                            self.state = State::MountRamdisk;
-                        }
+                    } else {
+                        info!("Using Linux native ramdisk isolation");
+                        self.state = State::MountRamdisk;
                     }
-                } else {
-                    info!("Using Linux native ramdisk isolation");
+                }
+
+                #[cfg(not(target_os = "linux"))]
+                {
+                    info!("Using platform-specific isolation");
                     self.state = State::MountRamdisk;
                 }
 
@@ -269,14 +282,17 @@ impl ExecutionFlow {
 
     /// Cleans up the ramdisk and VM when operations are complete or on failure
     fn cleanup_ramdisk(&self) {
-        // Firecracker VM cleanup
-        if let Some(vm) = &self.firecracker_vm {
-            // Block on async function from sync context
-            let handle = tokio::runtime::Handle::current();
-            if let Err(e) = handle.block_on(vm.stop()) {
-                error!("Failed to stop Firecracker VM: {}", e);
-            } else {
-                info!("Firecracker VM stopped successfully");
+        // Firecracker VM cleanup (Linux only)
+        #[cfg(target_os = "linux")]
+        {
+            if let Some(vm) = &self.firecracker_vm {
+                // Block on async function from sync context
+                let handle = tokio::runtime::Handle::current();
+                if let Err(e) = handle.block_on(vm.stop()) {
+                    error!("Failed to stop Firecracker VM: {}", e);
+                } else {
+                    info!("Firecracker VM stopped successfully");
+                }
             }
         }
 

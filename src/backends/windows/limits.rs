@@ -4,7 +4,7 @@
 // Resource limit configuration helpers for Windows Job Objects
 // ============================================================================
 
-use crate::backends::{BackendError, BackendResult, ResourceLimits};
+use crate::backends::{BackendResult, ResourceLimits};
 
 /// Convert resource limits to Windows Job Object limit values
 ///
@@ -31,27 +31,10 @@ impl WindowsLimits {
     /// # Returns
     /// WindowsLimits instance with converted values
     pub fn from_resource_limits(limits: &ResourceLimits) -> BackendResult<Self> {
-        let memory_bytes = if let Some(mem_mb) = limits.memory_mb {
-            if mem_mb == 0 {
-                return Err(BackendError::Configuration(
-                    "Memory limit must be greater than 0".to_string(),
-                ));
-            }
-            Some(mem_mb as u64 * 1024 * 1024)
-        } else {
-            None
-        };
+        let memory_bytes = limits.max_memory;
 
-        let cpu_time_ms = if let Some(cpu_secs) = limits.cpu_time_secs {
-            if cpu_secs == 0 {
-                return Err(BackendError::Configuration(
-                    "CPU time limit must be greater than 0".to_string(),
-                ));
-            }
-            Some(cpu_secs as u64 * 1000)
-        } else {
-            None
-        };
+        let cpu_time_ms = limits.max_cpu_time
+            .map(|secs| secs * 1000);
 
         let max_processes = limits.max_processes;
 

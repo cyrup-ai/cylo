@@ -16,6 +16,9 @@
 // Total: 1,553 lines (no single module >= 500 lines)
 // ============================================================================
 
+// Firecracker backend is Linux-only (requires KVM)
+#![cfg(target_os = "linux")]
+
 mod api_client;
 mod config;
 mod ssh;

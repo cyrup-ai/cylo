@@ -2,7 +2,9 @@ use std::fs::File;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+#[cfg(target_os = "linux")]
 use log::{error, info};
+#[cfg(target_os = "linux")]
 use xattr::FileExt;
 
 /// Metadata keys used for source code files
@@ -140,26 +142,24 @@ fn main() -> io::Result<()> {{
     }
 
     /// Updates metadata for a source code file
+    #[cfg(target_os = "linux")]
     pub fn update_metadata<P: AsRef<Path>>(&self, path: P, language: &str) -> io::Result<()> {
+        use xattr::FileExt;
         let path = path.as_ref();
 
-        // Try to open the file, but don't fail if we can't set xattrs
         match File::open(path) {
             Ok(file) => {
-                // Try to update language
                 if let Err(e) = file.set_xattr(XATTR_LANGUAGE, language.as_bytes()) {
                     error!("Failed to set language xattr: {}", e);
-                    return Ok(()); // Continue without xattrs
+                    return Ok(());
                 }
 
-                // Update last executed timestamp
                 let timestamp = chrono::Utc::now().to_rfc3339();
                 if let Err(e) = file.set_xattr(XATTR_LAST_EXECUTED, timestamp.as_bytes()) {
                     error!("Failed to set timestamp xattr: {}", e);
-                    return Ok(()); // Continue without xattrs
+                    return Ok(());
                 }
 
-                // Increment execution count
                 let count = match file.get_xattr(XATTR_EXECUTION_COUNT) {
                     Ok(Some(bytes)) => {
                         String::from_utf8_lossy(&bytes).parse::<u32>().unwrap_or(0) + 1
@@ -170,7 +170,7 @@ fn main() -> io::Result<()> {{
                 if let Err(e) = file.set_xattr(XATTR_EXECUTION_COUNT, count.to_string().as_bytes())
                 {
                     error!("Failed to set execution count xattr: {}", e);
-                    return Ok(()); // Continue without xattrs
+                    return Ok(());
                 }
 
                 info!(
@@ -189,8 +189,17 @@ fn main() -> io::Result<()> {{
         Ok(())
     }
 
+    /// Updates metadata for a source code file (no-op on non-Linux platforms)
+    #[cfg(not(target_os = "linux"))]
+    pub fn update_metadata<P: AsRef<Path>>(&self, _path: P, _language: &str) -> io::Result<()> {
+        // Extended attributes not supported on this platform
+        Ok(())
+    }
+
     /// Gets metadata for a source code file
+    #[cfg(target_os = "linux")]
     pub fn get_metadata<P: AsRef<Path>>(&self, path: P) -> io::Result<Option<FileMetadata>> {
+        use xattr::FileExt;
         let path = path.as_ref();
         let file = File::open(path)?;
 
@@ -217,6 +226,13 @@ fn main() -> io::Result<()> {{
             last_executed,
             execution_count,
         }))
+    }
+
+    /// Gets metadata for a source code file (returns None on non-Linux platforms)
+    #[cfg(not(target_os = "linux"))]
+    pub fn get_metadata<P: AsRef<Path>>(&self, _path: P) -> io::Result<Option<FileMetadata>> {
+        // Extended attributes not supported on this platform
+        Ok(None)
     }
 }
 

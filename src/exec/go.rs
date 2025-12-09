@@ -9,6 +9,8 @@ use crate::metadata::MetadataManager;
 use crate::sandbox::create_go_environment;
 
 use super::utils::get_safe_watched_dir;
+#[cfg(test)]
+use super::utils::command_exists;
 
 /// Executes Go code in a sandboxed environment
 pub fn exec_go(code: &str, config: &RamdiskConfig) -> Result<()> {
