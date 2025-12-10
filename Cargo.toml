@@ -1,6 +1,6 @@
 [package]
 name = "cylo"
-version = "0.10.3"
+version = "0.10.4"
 edition = "2024"
 description = "Secure multi-language code execution service"
 authors = ["CYRUP AI"]
