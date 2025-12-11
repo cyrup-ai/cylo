@@ -4,8 +4,6 @@ use std::path::{Path, PathBuf};
 
 #[cfg(target_os = "linux")]
 use log::{error, info};
-#[cfg(target_os = "linux")]
-use xattr::FileExt;
 
 /// Metadata keys used for source code files
 pub const XATTR_NAMESPACE: &str = "user.ironexec";
