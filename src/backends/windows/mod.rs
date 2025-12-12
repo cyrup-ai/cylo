@@ -129,7 +129,7 @@ impl WindowsJobBackend {
                 log::debug!("Rust compilation successful, executable: {:?}", exe_path);
 
                 // Return command to execute the compiled binary
-                let mut c = Command::new(&exe_path);
+                let c = Command::new(&exe_path);
                 c
             }
             "javascript" | "js" | "node" => {
